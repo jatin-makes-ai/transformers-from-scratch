@@ -1,0 +1,2 @@
+This is the raw data for training our transformers model.
+This tiny dataset is built to train on character-level sequences.
