@@ -1,4 +1,3 @@
-# src/model/transformer.py
 import torch
 import torch.nn as nn
 from .modules import TokenEmbedding, PositionalEncoding, TransformerBlock
@@ -54,3 +53,40 @@ class TinyTransformerLM(nn.Module):
         x = self.ln_f(x)                # (B, T, D)
         logits = self.head(x)           # (B, T, V)
         return logits
+
+    def get_input_embeddings(self):
+        """Return the underlying nn.Embedding used for token embeddings."""
+        # tok_emb is a TokenEmbedding wrapper; it holds the real embedding at .embedding
+        if hasattr(self, "tok_emb"):
+            te = self.tok_emb
+            # if wrapper has .embedding attribute that is nn.Embedding, return it
+            if hasattr(te, "embedding") and isinstance(te.embedding, nn.Embedding):
+                return te.embedding
+            # if tok_emb itself is an Embedding
+            if isinstance(te, nn.Embedding):
+                return te
+        # fallback: search submodules
+        for name, mod in self.named_modules():
+            if isinstance(mod, nn.Embedding):
+                return mod
+        raise AttributeError("No nn.Embedding found in model.")
+
+    def set_input_embeddings(self, new_emb: nn.Embedding):
+        """Replace underlying embedding. Tries to place into tok_emb.embedding if present."""
+        if hasattr(self, "tok_emb"):
+            te = self.tok_emb
+            if hasattr(te, "embedding"):
+                setattr(te, "embedding", new_emb)
+                return
+            # if tok_emb itself is an Embedding
+            if isinstance(te, nn.Embedding):
+                self.tok_emb = new_emb
+                return
+        # fallback: attach to tok_emb
+        self.tok_emb = TokenEmbedding(new_emb.num_embeddings, new_emb.embedding_dim)
+        # try to copy weights if dims match
+        try:
+            self.tok_emb.embedding = new_emb
+        except Exception:
+            pass
+
